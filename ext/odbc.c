@@ -5929,7 +5929,6 @@ do_fetch(STMT *q, int mode)
     }
     if (++q->fetchc >= 500) {
 	q->fetchc = 0;
-	start_gc();
     }
     bufs = q->dbufs;
     if (bufs == NULL) {
