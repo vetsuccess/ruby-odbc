@@ -5643,11 +5643,15 @@ stmt_param_output_value(int argc, VALUE *argv, VALUE self)
 		VALUE d;
 
 		date = (DATE_STRUCT *) q->paraminfo[vnum].outbuf;
-        v = rb_funcall(rb_cDate, IDnew, 3, date->year, date->month, date->day);
-        } else {
-        date = (DATE_STRUCT *) q->paraminfo[vnum].outbuf;
-        v = rb_funcall(rb_cDate, IDnew, 3, date->year, date->month, date->day);
-        }
+		p = (q->dbcp->gmtime == Qtrue) ? "+00:00" : "";
+		sprintf(buffer, "%d-%d-%dT00:00:00%s",
+			date->year, date->month, date->day, p);
+		d = rb_str_new2(buffer);
+		v = rb_funcall(rb_cDate, IDparse, 1, d);
+	    } else {
+		    date = (DATE_STRUCT *) q->paraminfo[vnum].outbuf;
+        	v = rb_funcall(rb_cDate, IDnew, 3, INT2FIX(date->year), INT2FIX(date->month), INT2FIX(date->day));
+	    }
 	}
 	break;
     case SQL_C_TIME:
@@ -6279,11 +6283,15 @@ do_fetch(STMT *q, int mode)
 			VALUE d;
 
 			date = (DATE_STRUCT *) valp;
-            v = rb_funcall(rb_cDate, IDnew, 3, date->year, date->month, date->day);
-            } else {
-            date = (DATE_STRUCT *) valp;
-            v = rb_funcall(rb_cDate, IDnew, 3, date->year, date->month, date->day);
-            }
+			p = (q->dbcp->gmtime == Qtrue) ? "+00:00" : "";
+			sprintf(buffer, "%d-%d-%dT00:00:00%s",
+				date->year, date->month, date->day, p);
+			d = rb_str_new2(buffer);
+			v = rb_funcall(rb_cDate, IDparse, 1, d);
+		    } else {
+		        date = (DATE_STRUCT *) valp;
+                v = rb_funcall(rb_cDate, IDnew, 3, INT2FIX(date->year), INT2FIX(date->month), INT2FIX(date->day));
+		    }
 		}
 		break;
 	    case SQL_C_TIME:
