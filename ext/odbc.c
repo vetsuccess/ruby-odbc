@@ -458,7 +458,7 @@ uc_tainted_str_new(SQLWCHAR *str, int len)
     if ((cp != NULL) && (str != NULL)) {
 	ulen = mkutf(cp, str, len);
     }
-    v = rb_tainted_str_new((cp != NULL) ? cp : "", ulen);
+    v = rb_str_new((cp != NULL) ? cp : "", ulen);
 #ifdef USE_RB_ENC
     rb_enc_associate(v, rb_enc);
 #endif
@@ -5636,22 +5636,9 @@ stmt_param_output_value(int argc, VALUE *argv, VALUE self)
     case SQL_C_DATE:
 	{
 	    DATE_STRUCT *date;
+        date = (DATE_STRUCT *) q->paraminfo[vnum].outbuf;
+        v = rb_funcall(rb_cDate, IDnew, 3, INT2FIX(date->year), INT2FIX(date->month), INT2FIX(date->day));
 
-	    if (q->dbcp != NULL && q->dbcp->rbtime == Qtrue) {
-		const char *p;
-		char buffer[128];
-		VALUE d;
-
-		date = (DATE_STRUCT *) q->paraminfo[vnum].outbuf;
-		p = (q->dbcp->gmtime == Qtrue) ? "+00:00" : "";
-		sprintf(buffer, "%d-%d-%dT00:00:00%s",
-			date->year, date->month, date->day, p);
-		d = rb_str_new2(buffer);
-		v = rb_funcall(rb_cDate, IDparse, 1, d);
-	    } else {
-		    date = (DATE_STRUCT *) q->paraminfo[vnum].outbuf;
-        	v = rb_funcall(rb_cDate, IDnew, 3, INT2FIX(date->year), INT2FIX(date->month), INT2FIX(date->day));
-	    }
 	}
 	break;
     case SQL_C_TIME:
@@ -6276,22 +6263,8 @@ do_fetch(STMT *q, int mode)
 	    case SQL_C_DATE:
 		{
 		    DATE_STRUCT *date;
-
-		    if (q->dbcp != NULL && q->dbcp->rbtime == Qtrue) {
-			const char *p;
-			char buffer[128];
-			VALUE d;
-
-			date = (DATE_STRUCT *) valp;
-			p = (q->dbcp->gmtime == Qtrue) ? "+00:00" : "";
-			sprintf(buffer, "%d-%d-%dT00:00:00%s",
-				date->year, date->month, date->day, p);
-			d = rb_str_new2(buffer);
-			v = rb_funcall(rb_cDate, IDparse, 1, d);
-		    } else {
-		        date = (DATE_STRUCT *) valp;
-                v = rb_funcall(rb_cDate, IDnew, 3, INT2FIX(date->year), INT2FIX(date->month), INT2FIX(date->day));
-		    }
+            date = (DATE_STRUCT *) valp;
+            v = rb_funcall(rb_cDate, IDnew, 3, INT2FIX(date->year), INT2FIX(date->month), INT2FIX(date->day));
 		}
 		break;
 	    case SQL_C_TIME:
