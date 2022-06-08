@@ -4282,6 +4282,152 @@ do_option(int argc, VALUE *argv, VALUE self, int isstmt, int op)
     char *msg;
     int level = isstmt ? OPT_LEVEL_STMT : OPT_LEVEL_DBC;
 
+    rb_scan_args(argc, argv, "01", &val, &val2);
+    if (isstmt) {
+	Data_Get_Struct(self, STMT, q);
+	if (q->dbc == Qnil) {
+	    rb_raise(Cerror, "%s", set_err("Stale ODBC::Statement", 0));
+	}
+	if (q->hstmt == SQL_NULL_HSTMT) {
+	    rb_raise(Cerror, "%s", set_err("No statement", 0));
+	}
+    } else {
+	p = get_dbc(self);
+	if (p->hdbc == SQL_NULL_HDBC) {
+	    rb_raise(Cerror, "%s", set_err("No connection", 0));
+	}
+    }
+    if (op == -1) {
+	char *string;
+	int i, op_found = 0;
+
+	switch (TYPE(val)) {
+	default:
+	    vstr = rb_any_to_s(val);
+	    string = STR2CSTR(vstr);
+	    goto doString;
+	case T_STRING:
+	    string = STR2CSTR(val);
+	doString:
+	    for (i = 0; option_map[i].name != NULL; i++) {
+		if (strcmp(string, option_map[i].name) == 0) {
+		    op = option_map[i].option;
+		    level = option_map[i].level;
+		    op_found = 3;
+		    break;
+		}
+	    }
+	    break;
+	case T_FLOAT:
+	case T_BIGNUM:
+	    op = (int) NUM2DBL(val);
+	    goto doInt;
+	case T_FIXNUM:
+	    op = FIX2INT(val);
+	doInt:
+	    op_found = 1;
+	    for (i = 0; option_map[i].name != NULL; i++) {
+		if (op == option_map[i].option) {
+		    level = option_map[i].level;
+		    op_found = 2;
+		    break;
+		}
+	    }
+	    break;
+	}
+	if (!op_found) {
+	    rb_raise(Cerror, "%s", set_err("Unknown option", 0));
+	    return Qnil;
+	}
+	val = val2;
+    }
+    if ((isstmt && (!(level & OPT_LEVEL_STMT))) ||
+	(!isstmt && (!(level & OPT_LEVEL_DBC)))) {
+	rb_raise(Cerror, "%s",
+		 set_err("Invalid option type for this level", 0));
+	return Qnil;
+    }
+    if (val == Qnil) {
+	if (p != NULL) {
+	    if (!succeeded(SQL_NULL_HENV, p->hdbc, SQL_NULL_HSTMT,
+			   SQLGetConnectOption(p->hdbc, (SQLUSMALLINT) op,
+					       (SQLPOINTER) &v),
+			   &msg, "SQLGetConnectOption(%d)", op)) {
+		rb_raise(Cerror, "%s", msg);
+	    }
+	} else {
+	    if (!succeeded(SQL_NULL_HENV, SQL_NULL_HSTMT, q->hstmt,
+			   SQLGetStmtOption(q->hstmt, (SQLUSMALLINT) op,
+					    (SQLPOINTER) &v),
+			   &msg, "SQLGetStmtOption(%d)", op)) {
+		rb_raise(Cerror, "%s", msg);
+	    }
+	}
+    }
+    switch (op) {
+    case SQL_AUTOCOMMIT:
+	if (val == Qnil) {
+	    return v ? Qtrue : Qfalse;
+	}
+	v = (TYPE(val) == T_FIXNUM) ?
+	    (FIX2INT(val) ? SQL_AUTOCOMMIT_ON : SQL_AUTOCOMMIT_OFF) :
+	    (RTEST(val) ? SQL_AUTOCOMMIT_ON : SQL_AUTOCOMMIT_OFF);
+	break;
+
+    case SQL_NOSCAN:
+	if (val == Qnil) {
+	    return v ? Qtrue : Qfalse;
+	}
+	v = (TYPE(val) == T_FIXNUM) ?
+	    (FIX2INT(val) ? SQL_NOSCAN_ON : SQL_NOSCAN_OFF) :
+	    (RTEST(val) ? SQL_NOSCAN_ON : SQL_NOSCAN_OFF);
+	break;
+
+    case SQL_CONCURRENCY:
+    case SQL_QUERY_TIMEOUT:
+    case SQL_MAX_ROWS:
+    case SQL_MAX_LENGTH:
+    case SQL_ROWSET_SIZE:
+    case SQL_CURSOR_TYPE:
+    default:
+	if (val == Qnil) {
+	    return rb_int2inum(v);
+	}
+	Check_Type(val, T_FIXNUM);
+	v = FIX2INT(val);
+	if (op == SQL_ROWSET_SIZE) {
+	    rb_raise(Cerror, "%s", set_err("Read only attribute", 0));
+	}
+	break;
+    }
+    if (p != NULL) {
+	if (!succeeded(SQL_NULL_HENV, p->hdbc, SQL_NULL_HSTMT,
+		       SQLSetConnectOption(p->hdbc, (SQLUSMALLINT) op,
+					   (SQLUINTEGER) v),
+		       &msg, "SQLSetConnectOption(%d)", op)) {
+	    rb_raise(Cerror, "%s", msg);
+	}
+    } else {
+	if (!succeeded(SQL_NULL_HENV, SQL_NULL_HDBC, q->hstmt,
+		       SQLSetStmtOption(q->hstmt, (SQLUSMALLINT) op,
+					(SQLUINTEGER) v),
+		       &msg, "SQLSetStmtOption(%d)", op)) {
+	    rb_raise(Cerror, "%s", msg);
+	}
+    }
+    return Qnil;
+}
+
+static VALUE
+do_option_mandatory_argument(int argc, VALUE *argv, VALUE self, int isstmt, int op)
+{
+    DBC *p = NULL;
+    STMT *q = NULL;
+    VALUE val, val2, vstr;
+    SQLINTEGER v;
+    char *msg;
+    int level = isstmt ? OPT_LEVEL_STMT : OPT_LEVEL_DBC;
+
     rb_scan_args(argc, argv, "11", &val, &val2);
     if (isstmt) {
 	Data_Get_Struct(self, STMT, q);
@@ -4469,7 +4615,7 @@ dbc_noscan(int argc, VALUE *argv, VALUE self)
 static VALUE
 dbc_getsetoption(int argc, VALUE *argv, VALUE self)
 {
-    return do_option(argc, argv, self, 0, -1);
+    return do_option_mandatory_argument(argc, argv, self, 0, -1);
 }
 
 static VALUE
@@ -4517,7 +4663,7 @@ stmt_noscan(int argc, VALUE *argv, VALUE self)
 static VALUE
 stmt_getsetoption(int argc, VALUE *argv, VALUE self)
 {
-    return do_option(argc, argv, self, 1, -1);
+    return do_option_mandatory_argument(argc, argv, self, 1, -1);
 }
 
 /*
