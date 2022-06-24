@@ -4282,13 +4282,12 @@ do_option(int argc, VALUE *argv, VALUE self, int isstmt, int op)
     char *msg;
     int level = isstmt ? OPT_LEVEL_STMT : OPT_LEVEL_DBC;
 
-    if (op == -1) {
-        rb_scan_args(argc, argv, "11", &val, &val2);
-    } else {
-         // not really sure what needs to go here. In original impl it was `rb_scan_args(argc, argv, (op == -1) ? "11" : "01", &val, &val2);`
-         // also, both set_option/get_option call -1 branch
-         rb_scan_args(argc, argv, "01", &val);
+    // https://github.com/cloudvolumes/ruby-odbc/commit/bef5ef548087f0739907d12798872080c0836408
+    char *opvalue = "01";
+    if(op == -1) {
+        opvalue == "11";
     }
+    rb_scan_args(argc, argv, opvalue, &val, &val2);
     if (isstmt) {
 	Data_Get_Struct(self, STMT, q);
 	if (q->dbc == Qnil) {
