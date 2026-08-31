@@ -24,13 +24,19 @@
 #endif
 
 /*
- * Ruby 3.2 removed the object-taint C API (taint has been a no-op since
- * Ruby 2.7). Alias the taint helpers to their plain equivalents so this
+ * Ruby 3.2 removed the object-taint C API, and taint has been a no-op since
+ * Ruby 2.7. Alias the taint helpers to their plain equivalents so this
  * extension builds on 3.2+; older Rubies keep using the real functions.
+ *
+ * The guard is 3.0 rather than 3.2 on purpose: taint already does nothing
+ * from 3.0 on, so the alias is behaviour-identical, it silences the
+ * deprecation warnings on 3.1, and it gets compiled by every build instead
+ * of staying untested until the first 3.2 attempt.
+ *
  * ruby.h does not pull in the version macros, so include them explicitly.
  */
 #include <ruby/version.h>
-#if RUBY_API_VERSION_CODE >= 30200
+#if RUBY_API_VERSION_CODE >= 30000
 #define rb_obj_taint(obj) (obj)
 #define rb_tainted_str_new(ptr, len) rb_str_new((ptr), (len))
 #define rb_tainted_str_new2(cstr) rb_str_new2(cstr)
